@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button'
 	import { Camera, CameraResultType } from '@capacitor/camera'
-	import { OpenAI } from 'openai'
-	import { PUBLIC_OPENAI_API_KEY } from '$env/static/public'
 	import { supabase } from '$lib/supabase'
 
-	const openai = new OpenAI({
-		apiKey: PUBLIC_OPENAI_API_KEY,
-		dangerouslyAllowBrowser: true, // Note: Be cautious with this in production
+	// Define reactive state using Svelte 5 $state
+	let { imageUrl, results } = $state({
+		imageUrl: null,
+		results: null,
 	})
-
-	let imageUrl: string | null = null
 
 	const takePicture = async () => {
 		const image = await Camera.getPhoto({
@@ -19,28 +16,20 @@
 			resultType: CameraResultType.Uri,
 		})
 		if (image.webPath) {
-			imageUrl = image.webPath
+			imageUrl = image.webPath // Directly assign to update imageUrl reactively
 		}
-
-		// Can be set to the src of an image now
-		const imageElement: HTMLImageElement | null = document.getElementById(
-			'imageElement'
-		) as HTMLImageElement
-		if (imageElement) {
-			imageElement.src = imageUrl
-		}
+		results = null
 	}
-	let results = null
+
 	async function checkIfVegan(): Promise<void> {
 		console.log('checking if vegan')
-		results = null
+		results = null // Directly assign to reset results reactively
 		if (!imageUrl) {
 			console.error('No image URL available')
 			return
 		}
 
 		try {
-			// Fetch the image and convert it to base64
 			const response = await fetch(imageUrl)
 			const blob = await response.blob()
 			const base64Image = await blobToBase64(blob)
@@ -52,15 +41,14 @@
 
 			console.log('data', data)
 			console.log('error', error)
-			
+
 			if (data) {
 				try {
 					const json = data?.data?.result?.choices[0]?.message?.content
 					if (json) {
-						results = JSON.parse(json)
+						results = JSON.parse(json) // Directly assign to update results reactively
 					}
 				} catch (e) {
-					// data?.data?.result?.choices[0]?.message?.content
 					results = {
 						resultsError: data?.data?.result?.choices[0]?.message?.content,
 						isVegan: false,
@@ -70,63 +58,18 @@
 					console.error('Error parsing data as JSON', e)
 				}
 			}
-
-			const veganStatusElement: HTMLHeadingElement | null = document.getElementById(
-				'veganStatus'
-			) as HTMLHeadingElement
-			const reasonElement: HTMLParagraphElement | null = document.getElementById(
-				'reason'
-			) as HTMLParagraphElement
-			const ingredientsListElement: HTMLUListElement | null = document.getElementById(
-				'ingredientsList'
-			) as HTMLUListElement
-
-			if (error) {
-				if (veganStatusElement) veganStatusElement.textContent = `Error: ${error.message}`
-				if (reasonElement) reasonElement.textContent = ''
-				if (ingredientsListElement) ingredientsListElement.innerHTML = ''
-			} else if (results) {
-				const { isVegan, ingredients, reason, resultsError } = results
-				if (resultsError) {
-					if (veganStatusElement) veganStatusElement.textContent = 'Error'
-					if (reasonElement) reasonElement.textContent = resultsError
-					if (ingredientsListElement) ingredientsListElement.innerHTML = ''
-				} else {
-					if (veganStatusElement) {
-						veganStatusElement.textContent = isVegan ? 'Vegan' : 'Not Vegan'
-						veganStatusElement.className = isVegan
-							? 'text-green-500 font-bold text-2xl'
-							: 'text-red-500 font-bold text-2xl'
-					}
-					if (reasonElement) reasonElement.textContent = `${reason}`
-					if (ingredientsListElement) {
-						ingredientsListElement.innerHTML = ingredients
-							.map((ingredient: string) => `<li>${ingredient}</li>`)
-							.join('')
-					}
-				}
-			}
 		} catch (error) {
 			console.error('Error in checkIfVegan:', error)
 			alert('An error occurred while checking the image')
-			const veganStatusElement: HTMLHeadingElement | null = document.getElementById(
-				'veganStatus'
-			) as HTMLHeadingElement
-			const reasonElement: HTMLParagraphElement | null = document.getElementById(
-				'reason'
-			) as HTMLParagraphElement
-			const ingredientsListElement: HTMLUListElement | null = document.getElementById(
-				'ingredientsList'
-			) as HTMLUListElement
-
-			if (veganStatusElement)
-				veganStatusElement.textContent = 'Error: An error occurred while checking the image'
-			if (reasonElement) reasonElement.textContent = ''
-			if (ingredientsListElement) ingredientsListElement.innerHTML = ''
+			results = {
+				resultsError: 'An error occurred while checking the image',
+				isVegan: false,
+				ingredients: [],
+				reason: '',
+			}
 		}
 	}
 
-	// New helper function to convert Blob to base64
 	function blobToBase64(blob: Blob): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader()
@@ -149,17 +92,31 @@
 		<div class="mt-4 flex flex-col items-center">
 			<img alt="" src={imageUrl || ''} id="imageElement" class="w-3/4 mb-4" />
 			<Button disabled={!imageUrl} on:click={checkIfVegan}>Is it vegan?</Button>
-			<div id="analysis" class="w-full flex justify-center mt-4">
-				<div class="result-box">
-					<p id="veganStatus" class=""></p>
-					<p id="reason" class="mb-4"></p>
-					<h3 class="font-semibold mb-2">Ingredients:</h3>
-					<ul id="ingredientsList"></ul>
+			{#if results}
+				<div id="analysis" class="w-full flex justify-center mt-4">
+					<div class="result-box">
+						<p
+							id="veganStatus"
+							class={results?.isVegan
+								? 'text-green-500 font-bold text-2xl'
+								: 'text-red-500 font-bold text-2xl'}
+						>
+							{results?.resultsError ? 'Error' : results?.isVegan ? 'Vegan' : 'Not Vegan'}
+						</p>
+						<p id="reason" class="mb-4">{results?.reason || results?.resultsError}</p>
+						{#if results?.ingredients?.length > 0}
+							<h3 class="font-semibold mb-2">Ingredients:</h3>
+							<ul id="ingredientsList">
+								{#each results?.ingredients || [] as ingredient}
+									<li>{ingredient}</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
 				</div>
-			</div>
+			{/if}
 		</div>
 	</div>
-	aabd
 </div>
 
 <style>
@@ -170,12 +127,12 @@
 		border-radius: 8px;
 		width: 80%;
 		max-width: 600px;
-		text-align: left; /* Left-align text */
+		text-align: left;
 	}
 	.result-box h2,
 	.result-box p,
 	.result-box h3,
 	.result-box ul {
-		margin-bottom: 16px; /* Add space between entries */
+		margin-bottom: 16px;
 	}
 </style>
