@@ -2,7 +2,7 @@
 	import { Button } from '$lib/components/ui/button'
 	import { Camera, CameraResultType } from '@capacitor/camera'
 	import { OpenAI } from 'openai'
-    import { PUBLIC_OPENAI_API_KEY } from '$env/static/public'
+	import { PUBLIC_OPENAI_API_KEY } from '$env/static/public'
 	import { supabase } from '$lib/supabase'
 
 	const openai = new OpenAI({
@@ -18,9 +18,9 @@
 			allowEditing: true,
 			resultType: CameraResultType.Uri,
 		})
-        if (image.webPath) {
-            imageUrl = image.webPath
-        }
+		if (image.webPath) {
+			imageUrl = image.webPath
+		}
 
 		// Can be set to the src of an image now
 		const imageElement: HTMLImageElement | null = document.getElementById(
@@ -30,9 +30,10 @@
 			imageElement.src = imageUrl
 		}
 	}
-	
+	let results = null
 	async function checkIfVegan(): Promise<void> {
 		console.log('checking if vegan')
+		results = null
 		if (!imageUrl) {
 			console.error('No image URL available')
 			return
@@ -46,12 +47,12 @@
 
 			console.log('sending image to isitvegan function')
 			const { data, error } = await supabase.functions.invoke('isitvegan', {
-				body: { image: `data:image/jpeg;base64,${base64Image}` }
+				body: { image: `data:image/jpeg;base64,${base64Image}` },
 			})
 
 			console.log('data', data)
 			console.log('error', error)
-			let results;
+			
 			if (data) {
 				try {
 					const json = data?.data?.result?.choices[0]?.message?.content
@@ -59,38 +60,67 @@
 						results = JSON.parse(json)
 					}
 				} catch (e) {
+					// data?.data?.result?.choices[0]?.message?.content
+					results = {
+						resultsError: data?.data?.result?.choices[0]?.message?.content,
+						isVegan: false,
+						ingredients: [],
+						reason: '',
+					}
 					console.error('Error parsing data as JSON', e)
 				}
 			}
 
-			const veganStatusElement: HTMLHeadingElement | null = document.getElementById('veganStatus') as HTMLHeadingElement
-			const reasonElement: HTMLParagraphElement | null = document.getElementById('reason') as HTMLParagraphElement
-			const ingredientsListElement: HTMLUListElement | null = document.getElementById('ingredientsList') as HTMLUListElement
+			const veganStatusElement: HTMLHeadingElement | null = document.getElementById(
+				'veganStatus'
+			) as HTMLHeadingElement
+			const reasonElement: HTMLParagraphElement | null = document.getElementById(
+				'reason'
+			) as HTMLParagraphElement
+			const ingredientsListElement: HTMLUListElement | null = document.getElementById(
+				'ingredientsList'
+			) as HTMLUListElement
 
 			if (error) {
 				if (veganStatusElement) veganStatusElement.textContent = `Error: ${error.message}`
 				if (reasonElement) reasonElement.textContent = ''
 				if (ingredientsListElement) ingredientsListElement.innerHTML = ''
 			} else if (results) {
-				const { isVegan, ingredients, reason } = results
-				if (veganStatusElement) {
-					veganStatusElement.textContent = isVegan ? 'Vegan' : 'Not Vegan'
-					veganStatusElement.className = isVegan ? 'text-green-500 font-bold text-2xl' : 'text-red-500 font-bold text-2xl'
-				}
-				if (reasonElement) reasonElement.textContent = `${reason}`
-				if (ingredientsListElement) {
-					ingredientsListElement.innerHTML = ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')
+				const { isVegan, ingredients, reason, resultsError } = results
+				if (resultsError) {
+					if (veganStatusElement) veganStatusElement.textContent = 'Error'
+					if (reasonElement) reasonElement.textContent = resultsError
+					if (ingredientsListElement) ingredientsListElement.innerHTML = ''
+				} else {
+					if (veganStatusElement) {
+						veganStatusElement.textContent = isVegan ? 'Vegan' : 'Not Vegan'
+						veganStatusElement.className = isVegan
+							? 'text-green-500 font-bold text-2xl'
+							: 'text-red-500 font-bold text-2xl'
+					}
+					if (reasonElement) reasonElement.textContent = `${reason}`
+					if (ingredientsListElement) {
+						ingredientsListElement.innerHTML = ingredients
+							.map((ingredient: string) => `<li>${ingredient}</li>`)
+							.join('')
+					}
 				}
 			}
-
 		} catch (error) {
 			console.error('Error in checkIfVegan:', error)
 			alert('An error occurred while checking the image')
-			const veganStatusElement: HTMLHeadingElement | null = document.getElementById('veganStatus') as HTMLHeadingElement
-			const reasonElement: HTMLParagraphElement | null = document.getElementById('reason') as HTMLParagraphElement
-			const ingredientsListElement: HTMLUListElement | null = document.getElementById('ingredientsList') as HTMLUListElement
+			const veganStatusElement: HTMLHeadingElement | null = document.getElementById(
+				'veganStatus'
+			) as HTMLHeadingElement
+			const reasonElement: HTMLParagraphElement | null = document.getElementById(
+				'reason'
+			) as HTMLParagraphElement
+			const ingredientsListElement: HTMLUListElement | null = document.getElementById(
+				'ingredientsList'
+			) as HTMLUListElement
 
-			if (veganStatusElement) veganStatusElement.textContent = 'Error: An error occurred while checking the image'
+			if (veganStatusElement)
+				veganStatusElement.textContent = 'Error: An error occurred while checking the image'
 			if (reasonElement) reasonElement.textContent = ''
 			if (ingredientsListElement) ingredientsListElement.innerHTML = ''
 		}
@@ -107,7 +137,7 @@
 					reject(new Error('Failed to convert blob to base64'))
 				}
 			}
-			reader.onerror = error => reject(error)
+			reader.onerror = (error) => reject(error)
 			reader.readAsDataURL(blob)
 		})
 	}
@@ -142,7 +172,10 @@
 		max-width: 600px;
 		text-align: left; /* Left-align text */
 	}
-	.result-box h2, .result-box p, .result-box h3, .result-box ul {
+	.result-box h2,
+	.result-box p,
+	.result-box h3,
+	.result-box ul {
 		margin-bottom: 16px; /* Add space between entries */
 	}
 </style>
