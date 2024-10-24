@@ -1,4 +1,6 @@
-import * as crypto from "https://deno.land/std/crypto/mod.ts"
+//import * as crypto from "https://deno.land/std/crypto/mod.ts"
+import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 // Follow this setup guide to integrate the Deno language server with your editor:
@@ -9,6 +11,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 Deno.serve(async (req) => {
+  // Add CORS headers
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+
+  // Handle OPTIONS request for CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     const { image } = await req.json()
 
@@ -22,17 +35,29 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
-
+    console.log("Supabase client initialized")
     // Decode base64 image
     const binaryData = atob(image.split(',')[1])
     const array = new Uint8Array(binaryData.length)
     for (let i = 0; i < binaryData.length; i++) {
       array[i] = binaryData.charCodeAt(i)
     }
+    console.log("Image decoded")
 
+    // Create a unique filename by generating a random UUID
+    const uniqueFilename = `${crypto.randomUUID()}.jpg`;
+    
     // Generate a unique filename
-    const filename = `${crypto.randomUUID()}.jpg`
+    let filename;
+    try {
+      filename = uniqueFilename
+      
+    } catch (e) {
+      console.error("Error generating random UUID", e)
+      filename = `${Date.now()}.jpg`
+    }
 
+    console.log("Uploading image to Supabase Storage", filename)
     // Upload image to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabaseClient
       .storage
@@ -40,6 +65,8 @@ Deno.serve(async (req) => {
       .upload(filename, array.buffer, {
         contentType: 'image/jpeg',
       })
+    console.log('uploadData', uploadData)
+    console.log('uploadError', uploadError)
 
     if (uploadError) {
       throw new Error(`Failed to upload image: ${uploadError.message}`)
@@ -55,12 +82,23 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ data, error: null }),
-      { headers: { "Content-Type": "application/json" } },
+      { 
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders  // Add CORS headers to the response
+        } 
+      },
     )
   } catch (error) {
     return new Response(
       JSON.stringify({ data: null, error: error.message }),
-      { headers: { "Content-Type": "application/json" }, status: 400 },
+      { 
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders  // Add CORS headers to the error response
+        }, 
+        status: 400 
+      },
     )
   }
 })
