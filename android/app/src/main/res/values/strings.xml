@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">my-app</string>
-    <string name="title_activity_main">my-app</string>
+    <string name="app_name">isitveganphoto</string>
+    <string name="title_activity_main">isitveganphoto</string>
     <string name="package_name">com.dmarie.myapp</string>
     <string name="custom_url_scheme">com.dmarie.myapp</string>
 </resources>
