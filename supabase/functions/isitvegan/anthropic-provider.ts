@@ -31,7 +31,7 @@ export class AnthropicProvider implements AIProvider {
               },
               {
                 type: "text",
-                text: "Extract and analyze the product ingredients from this photo to determine whether or not the product is vegan. Ignore anything in the photo that does not appear to be ingredients. Return a JSON object with the following fields: isVegan, ingredients, reason.  The result should only have the JSON object and nothing else, so it should begin with a { and end with a }.  Do not include any other text.",
+                text: "Extract and analyze the product ingredients from this photo to determine whether or not the product is vegan. Ignore anything in the photo that does not appear to be ingredients. Return a plain JSON object with the following fields: isVegan, ingredients, reason. Do not format the JSON as a code block.",
               },
             ],
           },

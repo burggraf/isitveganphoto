@@ -63,18 +63,36 @@
 				}
 			}
 
-			const analysisElement: HTMLDivElement | null = document.getElementById('analysis') as HTMLDivElement
-			if (analysisElement) {
-				if (error) {
-					analysisElement.textContent = `Error: ${error.message}`
-				} else {
-					analysisElement.textContent = `Result: ${JSON.stringify(results, null, 2)}`
+			const veganStatusElement: HTMLHeadingElement | null = document.getElementById('veganStatus') as HTMLHeadingElement
+			const reasonElement: HTMLParagraphElement | null = document.getElementById('reason') as HTMLParagraphElement
+			const ingredientsListElement: HTMLUListElement | null = document.getElementById('ingredientsList') as HTMLUListElement
+
+			if (error) {
+				if (veganStatusElement) veganStatusElement.textContent = `Error: ${error.message}`
+				if (reasonElement) reasonElement.textContent = ''
+				if (ingredientsListElement) ingredientsListElement.innerHTML = ''
+			} else if (results) {
+				const { isVegan, ingredients, reason } = results
+				if (veganStatusElement) {
+					veganStatusElement.textContent = isVegan ? 'Vegan' : 'Not Vegan'
+					veganStatusElement.className = isVegan ? 'text-green-500 font-bold text-2xl' : 'text-red-500 font-bold text-2xl'
+				}
+				if (reasonElement) reasonElement.textContent = `${reason}`
+				if (ingredientsListElement) {
+					ingredientsListElement.innerHTML = ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')
 				}
 			}
 
 		} catch (error) {
 			console.error('Error in checkIfVegan:', error)
 			alert('An error occurred while checking the image')
+			const veganStatusElement: HTMLHeadingElement | null = document.getElementById('veganStatus') as HTMLHeadingElement
+			const reasonElement: HTMLParagraphElement | null = document.getElementById('reason') as HTMLParagraphElement
+			const ingredientsListElement: HTMLUListElement | null = document.getElementById('ingredientsList') as HTMLUListElement
+
+			if (veganStatusElement) veganStatusElement.textContent = 'Error: An error occurred while checking the image'
+			if (reasonElement) reasonElement.textContent = ''
+			if (ingredientsListElement) ingredientsListElement.innerHTML = ''
 		}
 	}
 
@@ -101,8 +119,30 @@
 		<div class="mt-4 flex flex-col items-center">
 			<img alt="" src={imageUrl || ''} id="imageElement" class="w-3/4 mb-4" />
 			<Button disabled={!imageUrl} on:click={checkIfVegan}>Is it vegan?</Button>
-			<div id="analysis"></div>
+			<div id="analysis" class="w-full flex justify-center mt-4">
+				<div class="result-box">
+					<p id="veganStatus" class=""></p>
+					<p id="reason" class="mb-4"></p>
+					<h3 class="font-semibold mb-2">Ingredients:</h3>
+					<ul id="ingredientsList"></ul>
+				</div>
+			</div>
 		</div>
 	</div>
 	aabd
 </div>
+
+<style>
+	.result-box {
+		background-color: #f9f9f9;
+		border: 1px solid #ddd;
+		padding: 16px;
+		border-radius: 8px;
+		width: 80%;
+		max-width: 600px;
+		text-align: left; /* Left-align text */
+	}
+	.result-box h2, .result-box p, .result-box h3, .result-box ul {
+		margin-bottom: 16px; /* Add space between entries */
+	}
+</style>
