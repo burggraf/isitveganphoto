@@ -57,6 +57,8 @@ Deno.serve(async (req) => {
       filename = `${Date.now()}.jpg`
     }
 
+
+    
     console.log("Uploading image to Supabase Storage", filename)
     // Upload image to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabaseClient
@@ -72,41 +74,92 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to upload image: ${uploadError.message}`)
     }
 
-    // TODO: Implement image processing logic here
-    // For now, we'll just return a placeholder response
-    const data = {
-      isVegan: true,
-      confidence: 0.95,
-      imageUrl: uploadData.path,
+    // Analyze the image using Anthropic API
+    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!anthropicApiKey) {
+      throw new Error("ANTHROPIC_API_KEY is not set");
     }
+    console.log("Anthropic API key found")
+
+    const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicApiKey,
+        "anthropic-version": "2023-06-01"  // Add API version header
+      },
+      body: JSON.stringify({
+        model: "claude-3-5-sonnet-20241022",
+        //model: "claude-3-haiku-20240307",
+        max_tokens: 1000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/jpeg",
+                  data: image.split(',')[1],
+                },
+              },
+              {
+                type: "text",
+                text: "Extract the product ingredients from this photo. Analyze the ingredients to determine whether or not the product is vegan. Ignore anything in the photo that does not appear to be ingredients.",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!anthropicResponse.ok) {
+      console.error("Anthropic API error", anthropicResponse.statusText);
+      const errorBody = await anthropicResponse.text();
+      console.error("Error body:", errorBody);
+      throw new Error(`Anthropic API error: ${anthropicResponse.statusText}`);
+    }
+
+    const analysisResult = await anthropicResponse.json();
+    console.log("Anthropic API response", analysisResult)
+    const data = {
+      result: analysisResult,
+      imageUrl: uploadData.path,
+    };
 
     return new Response(
       JSON.stringify({ data, error: null }),
       { 
         headers: { 
           "Content-Type": "application/json",
-          ...corsHeaders  // Add CORS headers to the response
+          ...corsHeaders
         } 
       },
-    )
+    );
   } catch (error) {
     return new Response(
-      JSON.stringify({ data: null, error: error.message }),
+      JSON.stringify({ 
+        data: { 
+          analysisError: error.message 
+        }, 
+        error: error.message 
+      }),
       { 
         headers: { 
           "Content-Type": "application/json",
-          ...corsHeaders  // Add CORS headers to the error response
+          ...corsHeaders
         }, 
         status: 400 
       },
-    )
+    );
   }
 })
 
 /* To invoke locally:
 
   1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
+   2. Make an HTTP request:
 
   curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/isitvegan' \
     --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
