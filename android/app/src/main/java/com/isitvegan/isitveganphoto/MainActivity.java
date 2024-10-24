@@ -1,4 +1,4 @@
-package com.dmarie.myapp;
+package com.isitvegan.isitveganphoto;
 
 import com.getcapacitor.BridgeActivity;
 

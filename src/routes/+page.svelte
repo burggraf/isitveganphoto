@@ -31,14 +31,11 @@
 		}
 	}
 	
-	async function checkIfVegan() {
-	}
-
-	async function checkIfVegan1(): Promise<boolean> {
+	async function checkIfVegan(): Promise<void> {
 		console.log('checking if vegan')
 		if (!imageUrl) {
 			console.error('No image URL available')
-			return false
+			return
 		}
 
 		try {
@@ -47,47 +44,30 @@
 			const blob = await response.blob()
 			const base64Image = await blobToBase64(blob)
 
-			console.log('sending image to openai', base64Image.length)
-			const openaiResponse = await openai.chat.completions.create({
-				model: "gpt-4o",
-				messages: [
-					{
-						role: "user",
-						content: [
-							{
-								type: "text",
-								text: "Analyze the ingredients contained in this photo to determine whether or not the product is vegan. Ignore anything in the photo that does not appear to be ingredients."
-							},
-							{
-								type: "image_url",
-								image_url: {
-									url: `data:image/jpeg;base64,${base64Image}`
-								}
-							}
-						]
-					}
-				],
-				max_tokens: 300
+			console.log('sending image to isitvegan function')
+			const { data, error } = await supabase.functions.invoke('isitvegan', {
+				body: { image: `data:image/jpeg;base64,${base64Image}` }
 			})
 
-			const analysis = openaiResponse.choices[0].message.content;
-			console.log(analysis)
-			const analysisElement: HTMLDivElement | null = document.getElementById('analysis') as HTMLDivElement;
+			const analysisElement: HTMLDivElement | null = document.getElementById('analysis') as HTMLDivElement
 			if (analysisElement) {
-				analysisElement.textContent = analysis;
+				if (error) {
+					analysisElement.textContent = `Error: ${error.message}`
+				} else {
+					analysisElement.textContent = `Result: ${JSON.stringify(data, null, 2)}`
+				}
 			}
-			// Simple logic to determine if vegan (you may want to enhance this)
-			const isVegan = analysis?.toLowerCase().includes('vegan') && !analysis.toLowerCase().includes('not vegan');
-			if (isVegan) {
+
+			if (data && data.isVegan) {
 				alert('Vegan!')
-			} else {
+			} else if (data && !data.isVegan) {
 				alert('Not vegan!')
+			} else {
+				alert('Unable to determine if vegan')
 			}
-			return isVegan
 		} catch (error) {
 			console.error('Error in checkIfVegan:', error)
 			alert('An error occurred while checking the image')
-			return false
 		}
 	}
 
@@ -117,4 +97,5 @@
 			<div id="analysis"></div>
 		</div>
 	</div>
+	aabc
 </div>
