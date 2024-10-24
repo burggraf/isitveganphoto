@@ -2,6 +2,7 @@
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { getAIProvider } from './ai-providers.ts';
 
 // Follow this setup guide to integrate the Deno language server with your editor:
 // https://deno.land/manual/getting_started/setup_your_environment
@@ -10,13 +11,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-Deno.serve(async (req) => {
-  // Add CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
+// Define CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
+Deno.serve(async (req) => {
   // Handle OPTIONS request for CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -29,11 +30,19 @@ Deno.serve(async (req) => {
       throw new Error("Image parameter is required")
     }
 
+    console.log("SUPABASE_URL:", Deno.env.get('SUPABASE_URL'));
+    console.log("SUPABASE_SERVICE_ROLE_KEY set:", !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
+
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { 
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
     console.log("Supabase client initialized")
     // Decode base64 image
@@ -58,7 +67,7 @@ Deno.serve(async (req) => {
     }
 
 
-    
+/*    
     console.log("Uploading image to Supabase Storage", filename)
     // Upload image to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabaseClient
@@ -73,59 +82,31 @@ Deno.serve(async (req) => {
     if (uploadError) {
       throw new Error(`Failed to upload image: ${uploadError.message}`)
     }
+*/
 
-    // Analyze the image using Anthropic API
-    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!anthropicApiKey) {
-      throw new Error("ANTHROPIC_API_KEY is not set");
-    }
-    console.log("Anthropic API key found")
+    // Choose AI provider (you can change this to 'openai' or 'anthropic' when ready)
+    const aiProvider = getAIProvider('openai');
 
-    const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicApiKey,
-        "anthropic-version": "2023-06-01"  // Add API version header
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        //model: "claude-3-haiku-20240307",
-        max_tokens: 1000,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/jpeg",
-                  data: image.split(',')[1],
-                },
-              },
-              {
-                type: "text",
-                text: "Extract the product ingredients from this photo. Analyze the ingredients to determine whether or not the product is vegan. Ignore anything in the photo that does not appear to be ingredients.",
-              },
-            ],
-          },
-        ],
-      }),
-    });
+    console.log("Analyzing image with AI provider");
+    const analysisResult = await aiProvider.analyzeImage(image);
+    console.log("AI provider response", analysisResult);
 
-    if (!anthropicResponse.ok) {
-      console.error("Anthropic API error", anthropicResponse.statusText);
-      const errorBody = await anthropicResponse.text();
-      console.error("Error body:", errorBody);
-      throw new Error(`Anthropic API error: ${anthropicResponse.statusText}`);
+    // Save the result to the scans table
+    const { data: insertData, error: insertError } = await supabaseClient
+      .from('scans')
+      .insert({
+        result: analysisResult,
+        error: null
+      });
+
+    if (insertError) {
+      console.error("Error inserting scan result:", insertError);
+      throw new Error(`Failed to save scan result: ${insertError.message}`);
     }
 
-    const analysisResult = await anthropicResponse.json();
-    console.log("Anthropic API response", analysisResult)
     const data = {
       result: analysisResult,
-      imageUrl: uploadData.path,
+      //imageUrl: uploadData.path,
     };
 
     return new Response(
@@ -138,6 +119,20 @@ Deno.serve(async (req) => {
       },
     );
   } catch (error) {
+    console.error("Error in processing:", error);
+
+    // Save the error to the scans table
+    const { data: insertData, error: insertError } = await supabaseClient
+      .from('scans')
+      .insert({
+        result: null,
+        error: { message: error.message, stack: error.stack }
+      });
+
+    if (insertError) {
+      console.error("Error inserting scan error:", insertError);
+    }
+
     return new Response(
       JSON.stringify({ 
         data: { 

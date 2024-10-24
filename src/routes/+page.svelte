@@ -49,22 +49,29 @@
 				body: { image: `data:image/jpeg;base64,${base64Image}` }
 			})
 
+			console.log('data', data)
+			console.log('error', error)
+			let results;
+			if (data) {
+				try {
+					const json = data?.data?.result?.choices[0]?.message?.content
+					if (json) {
+						results = JSON.parse(json)
+					}
+				} catch (e) {
+					console.error('Error parsing data as JSON', e)
+				}
+			}
+
 			const analysisElement: HTMLDivElement | null = document.getElementById('analysis') as HTMLDivElement
 			if (analysisElement) {
 				if (error) {
 					analysisElement.textContent = `Error: ${error.message}`
 				} else {
-					analysisElement.textContent = `Result: ${JSON.stringify(data, null, 2)}`
+					analysisElement.textContent = `Result: ${JSON.stringify(results, null, 2)}`
 				}
 			}
 
-			if (data && data.isVegan) {
-				alert('Vegan!')
-			} else if (data && !data.isVegan) {
-				alert('Not vegan!')
-			} else {
-				alert('Unable to determine if vegan')
-			}
 		} catch (error) {
 			console.error('Error in checkIfVegan:', error)
 			alert('An error occurred while checking the image')
