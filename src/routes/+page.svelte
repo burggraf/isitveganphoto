@@ -8,6 +8,8 @@
 		imageUrl: null,
 		results: null,
 	})
+	let isLoading = $state(false)
+	let checkCompleted = $state(false) // New state to track if check is completed
 
 	const takePicture = async () => {
 		const image = await Camera.getPhoto({
@@ -19,15 +21,19 @@
 			imageUrl = image.webPath // Directly assign to update imageUrl reactively
 		}
 		results = null
+		checkCompleted = false
 	}
 
 	async function checkIfVegan(): Promise<void> {
 		console.log('checking if vegan')
-		results = null // Directly assign to reset results reactively
+		results = null
 		if (!imageUrl) {
 			console.error('No image URL available')
 			return
 		}
+
+		isLoading = true // Set loading state to true
+		checkCompleted = false // Reset check completed state
 
 		try {
 			const response = await fetch(imageUrl)
@@ -46,7 +52,7 @@
 				try {
 					const json = data?.data?.result?.choices[0]?.message?.content
 					if (json) {
-						results = JSON.parse(json) // Directly assign to update results reactively
+						results = JSON.parse(json)
 					}
 				} catch (e) {
 					results = {
@@ -67,6 +73,9 @@
 				ingredients: [],
 				reason: '',
 			}
+		} finally {
+			isLoading = false // Reset loading state
+			checkCompleted = true // Set check completed state to true
 		}
 	}
 
@@ -91,7 +100,10 @@
 		<Button class="mb-4 mt-20" on:click={takePicture}>Take Picture</Button>
 		<div class="mt-4 flex flex-col items-center">
 			<img alt="" src={imageUrl || ''} id="imageElement" class="w-3/4 mb-4" />
-			<Button disabled={!imageUrl} on:click={checkIfVegan}>Is it vegan?</Button>
+			<Button disabled={!imageUrl || isLoading || checkCompleted} on:click={checkIfVegan}>Is it vegan?</Button>
+			{#if isLoading}
+				<div class="spinner"></div> <!-- Updated spinner element -->
+			{/if}
 			{#if results}
 				<div id="analysis" class="w-full flex justify-center mt-4">
 					<div class="result-box">
@@ -120,6 +132,33 @@
 </div>
 
 <style>
+	.spinner {
+		display: inline-block;
+		width: 80px;
+		height: 80px;
+	}
+
+	.spinner:after {
+		content: " ";
+		display: block;
+		width: 64px;
+		height: 64px;
+		margin: 8px;
+		border-radius: 50%;
+		border: 6px solid #09f;
+		border-color: #09f transparent #09f transparent;
+		animation: spinner 1.2s linear infinite;
+	}
+
+	@keyframes spinner {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
+	}
+
 	.result-box {
 		background-color: #f9f9f9;
 		border: 1px solid #ddd;
