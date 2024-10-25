@@ -23,10 +23,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image } = await req.json()
+    const { image, hash } = await req.json()
 
     if (!image) {
       throw new Error("Image parameter is required")
+    }
+
+    if (!hash) {
+      throw new Error("Hash parameter is required")
     }
 
     console.log("SUPABASE_URL:", Deno.env.get('SUPABASE_URL'));
@@ -44,19 +48,9 @@ Deno.serve(async (req) => {
       }
     )
     console.log("Supabase client initialized")
-    // Decode base64 image
-    const binaryData = atob(image.split(',')[1])
-    const array = new Uint8Array(binaryData.length)
-    for (let i = 0; i < binaryData.length; i++) {
-      array[i] = binaryData.charCodeAt(i)
-    }
-    console.log("Image decoded")
-
-    // Generate SHA-256 hash of the file
-    const hashBuffer = await crypto.subtle.digest("SHA-256", array.slice(0, -2));  // Remove last two bytes (often metadata)
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    console.log("File hash generated:", fileHash);
+    // Use the hash sent from the client
+    const fileHash = hash;
+    console.log("File hash received:", fileHash);
 
     // Look up the file hash in the scans table
     const { data: existingScan, error: lookupError } = await supabaseClient

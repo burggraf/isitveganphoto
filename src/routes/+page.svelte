@@ -2,6 +2,7 @@
 	import { Button } from '$lib/components/ui/button'
 	import { Camera, CameraResultType } from '@capacitor/camera'
 	import { supabase } from '$lib/supabase'
+	// import { crypto } from 'crypto'
 
 	// Define reactive state using Svelte 5 $state
 	let { imageUrl, results } = $state({
@@ -40,9 +41,18 @@
 			const blob = await response.blob()
 			const base64Image = await blobToBase64(blob)
 
-			console.log('sending image to isitvegan function')
+			// Calculate SHA-256 hash of the image
+			const arrayBuffer = await blob.arrayBuffer()
+			const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer.slice(0, -2))
+			const hashArray = Array.from(new Uint8Array(hashBuffer))
+			const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+			console.log('sending image and hash to isitvegan function')
 			const { data, error } = await supabase.functions.invoke('isitvegan', {
-				body: { image: `data:image/jpeg;base64,${base64Image}` },
+				body: { 
+					image: `data:image/jpeg;base64,${base64Image}`,
+					hash: fileHash
+				},
 			})
 
 			console.log('data', data)
@@ -129,7 +139,7 @@
 			{/if}
 		</div>
 	</div>
-	v.0.0.3
+	v.0.0.4
 	
 </div>
 
