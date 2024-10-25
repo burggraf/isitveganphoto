@@ -1,6 +1,5 @@
 //import * as crypto from "https://deno.land/std/crypto/mod.ts"
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { getAIProvider } from './ai-providers.ts';
 
@@ -53,6 +52,12 @@ Deno.serve(async (req) => {
     }
     console.log("Image decoded")
 
+    // Generate SHA-256 hash of the file
+    const hashBuffer = await crypto.subtle.digest("SHA-256", array);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    console.log("File hash generated:", fileHash);
+
     // Create a unique filename by generating a random UUID
     const uniqueFilename = `${crypto.randomUUID()}.jpg`;
     
@@ -96,7 +101,8 @@ Deno.serve(async (req) => {
       .from('scans')
       .insert({
         result: analysisResult,
-        error: null
+        error: null,
+        hash: fileHash
       });
 
     if (insertError) {
