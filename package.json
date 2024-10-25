@@ -1,6 +1,6 @@
 {
 	"name": "isitveganphoto",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -34,6 +34,7 @@
 		"@capacitor/ios": "^6.1.2",
 		"@supabase/supabase-js": "^2.45.6",
 		"@sveltejs/adapter-static": "^3.0.5",
+		"cropperjs": "^1.6.2",
 		"openai": "^4.68.3"
 	}
 }

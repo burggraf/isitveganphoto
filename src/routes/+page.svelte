@@ -3,6 +3,9 @@
 	import { Camera, CameraResultType } from '@capacitor/camera'
 	import { supabase } from '$lib/supabase'
 	// import { crypto } from 'crypto'
+	import { onMount } from 'svelte'
+	import Cropper from 'cropperjs'
+	import 'cropperjs/dist/cropper.css'
 
 	// Define reactive state using Svelte 5 $state
 	let { imageUrl, results } = $state({
@@ -11,6 +14,8 @@
 	})
 	let isLoading = $state(false)
 	let checkCompleted = $state(false) // New state to track if check is completed
+	let cropperInstance: Cropper | null = null
+	let imageElement: HTMLImageElement
 
 	const takePicture = async () => {
 		const image = await Camera.getPhoto({
@@ -20,32 +25,60 @@
 		})
 		if (image.webPath) {
 			imageUrl = image.webPath // Directly assign to update imageUrl reactively
+			// Initialize Cropper after image is loaded
+			setTimeout(() => initializeCropper(), 0);
 		}
 		results = null
 		checkCompleted = false
 	}
 
+	function initializeCropper() {
+		if (cropperInstance) {
+			cropperInstance.destroy();
+		}
+		cropperInstance = new Cropper(imageElement, {
+			aspectRatio: NaN, // Allow free aspect ratio
+			viewMode: 1,
+			rotatable: true,
+			scalable: true,
+			autoCropArea: 1, // Show the whole image
+			cropBoxMovable: true, // Allow moving the crop box
+			cropBoxResizable: true, // Allow resizing the crop box
+			dragMode: 'move', // Enable dragging the image
+			ready: function() {
+				// Clear the crop box
+				this.clear();
+			}
+		});
+	}
+
 	async function checkIfVegan(): Promise<void> {
-		console.log('checking if vegan')
-		results = null
-		if (!imageUrl) {
-			console.error('No image URL available')
-			return
+		if (!cropperInstance) {
+			console.error('Cropper not initialized');
+			return;
+		}
+
+		const croppedCanvas = cropperInstance.getCroppedCanvas();
+		if (!croppedCanvas) {
+			console.error('Failed to get cropped canvas');
+			return;
 		}
 
 		isLoading = true // Set loading state to true
 		checkCompleted = false // Reset check completed state
 
 		try {
-			const response = await fetch(imageUrl)
-			const blob = await response.blob()
+			const blob = await new Promise<Blob>((resolve) => croppedCanvas.toBlob(resolve, 'image/jpeg'));
 			const base64Image = await blobToBase64(blob)
 
 			// Calculate SHA-256 hash of the image
 			const arrayBuffer = await blob.arrayBuffer()
-			const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer.slice(0, -2))
+			const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
 			const hashArray = Array.from(new Uint8Array(hashBuffer))
 			const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+			// Log the size of the image being transferred
+			console.log(`Image size being transferred: ${(blob.size / 1024).toFixed(2)} KB`)
 
 			console.log('sending image and hash to isitvegan function')
 			const { data, error } = await supabase.functions.invoke('isitvegan', {
@@ -103,13 +136,37 @@
 			reader.readAsDataURL(blob)
 		})
 	}
+
+	function rotateImage(direction: 'left' | 'right') {
+		if (cropperInstance) {
+			const angle = direction === 'left' ? -90 : 90;
+			cropperInstance.rotate(angle);
+		}
+	}
+
+	onMount(() => {
+		return () => {
+			if (cropperInstance) {
+				cropperInstance.destroy();
+			}
+			// ... rest of your existing onMount cleanup ...
+		};
+	});
 </script>
 
 <div class="flex flex-col items-center justify-center min-h-screen overflow-y-auto">
-	<div class="py-8">
+	<div class="py-8 w-full max-w-4xl px-4">
 		<Button class="mb-4 mt-20" on:click={takePicture}>Take Picture</Button>
 		<div class="mt-4 flex flex-col items-center">
-			<img alt="" src={imageUrl || ''} id="imageElement" class="w-3/4 mb-4" />
+			<div class="cropper-wrapper w-full mb-4">
+				<img alt="" src={imageUrl || ''} bind:this={imageElement} class="w-full" />
+			</div>
+			{#if imageUrl}
+				<div class="mb-4 flex gap-2">
+					<Button on:click={() => rotateImage('left')}>Rotate Left</Button>
+					<Button on:click={() => rotateImage('right')}>Rotate Right</Button>
+				</div>
+			{/if}
 			<Button disabled={!imageUrl || isLoading || checkCompleted} on:click={checkIfVegan}>Is it vegan?</Button>
 			{#if isLoading}
 				<div class="spinner"></div> <!-- Updated spinner element -->
@@ -139,7 +196,7 @@
 			{/if}
 		</div>
 	</div>
-	v.0.0.4
+	v.0.0.5
 	
 </div>
 
@@ -185,5 +242,27 @@
 	.result-box h3,
 	.result-box ul {
 		margin-bottom: 16px;
+	}
+
+	/* Add these styles for Cropper.js */
+	:global(.cropper-container) {
+		width: 100% !important;
+	}
+
+	:global(.cropper-wrapper .cropper-view-box) {
+		outline: none;
+		border: 2px solid #09f;
+	}
+
+	:global(.cropper-wrapper .cropper-face) {
+		opacity: 0.1; /* Slightly visible to show the crop area */
+	}
+
+	:global(.cropper-wrapper .cropper-line) {
+		background-color: #09f;
+	}
+
+	:global(.cropper-wrapper .cropper-point) {
+		background-color: #09f;
 	}
 </style>
