@@ -53,10 +53,35 @@ Deno.serve(async (req) => {
     console.log("Image decoded")
 
     // Generate SHA-256 hash of the file
-    const hashBuffer = await crypto.subtle.digest("SHA-256", array);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", array.slice(0, -2));  // Remove last two bytes (often metadata)
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     console.log("File hash generated:", fileHash);
+
+    // Look up the file hash in the scans table
+    const { data: existingScan, error: lookupError } = await supabaseClient
+      .from('scans')
+      .select('result, error')
+      .eq('hash', fileHash)
+      .single();
+
+    if (lookupError && lookupError.code !== 'PGRST116') {
+      console.error("Error looking up existing scan:", lookupError);
+      throw new Error(`Failed to look up existing scan: ${lookupError.message}`);
+    }
+
+    if (existingScan) {
+      console.log("Existing scan found, returning cached result");
+      return new Response(
+        JSON.stringify({ data: { result: existingScan.result }, error: existingScan.error }),
+        { 
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders
+          } 
+        },
+      );
+    }
 
     // Create a unique filename by generating a random UUID
     const uniqueFilename = `${crypto.randomUUID()}.jpg`;
@@ -70,24 +95,6 @@ Deno.serve(async (req) => {
       console.error("Error generating random UUID", e)
       filename = `${Date.now()}.jpg`
     }
-
-
-/*    
-    console.log("Uploading image to Supabase Storage", filename)
-    // Upload image to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabaseClient
-      .storage
-      .from('vegan-images')
-      .upload(filename, array.buffer, {
-        contentType: 'image/jpeg',
-      })
-    console.log('uploadData', uploadData)
-    console.log('uploadError', uploadError)
-
-    if (uploadError) {
-      throw new Error(`Failed to upload image: ${uploadError.message}`)
-    }
-*/
 
     // Choose AI provider (you can change this to 'openai' or 'anthropic' when ready)
     const aiProvider = getAIProvider('openai');
@@ -112,7 +119,6 @@ Deno.serve(async (req) => {
 
     const data = {
       result: analysisResult,
-      //imageUrl: uploadData.path,
     };
 
     return new Response(
